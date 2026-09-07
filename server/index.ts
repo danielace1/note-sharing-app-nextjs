@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import { sessionMiddleware } from "./session-middleware";
 import { auth } from "@/lib/auth";
 import notesRouter from "./routes/notes";
+import shareLinksRouter from "./routes/share-links";
+import shareRouter from "./routes/share";
 
 type Session = typeof auth.$Infer.Session;
 
@@ -30,5 +32,7 @@ app.get("/me", sessionMiddleware, (c) => {
 });
 
 app.route("/notes", notesRouter);
+app.route("/", shareLinksRouter);
+app.route("/share", shareRouter);
 
 export default app;

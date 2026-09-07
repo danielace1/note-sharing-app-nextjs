@@ -155,9 +155,12 @@ export default function NotePage() {
               This note may not exist or you may not have access to it.
             </p>
 
-            <Button asChild className="mt-6 rounded-xl">
-              <Link href="/notes">Back to notes</Link>
-            </Button>
+            <Link
+              href="/notes"
+              className="mt-6 inline-flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              Back to notes
+            </Link>
           </div>
         )}
 
