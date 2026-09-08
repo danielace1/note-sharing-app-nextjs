@@ -6,6 +6,16 @@ import { notes, shareLinks } from "@/db/schema";
 import { verifyPassword } from "@/lib/security/password";
 import { hashShareToken } from "@/lib/security/token";
 
+function noStoreHeaders() {
+  return {
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    Pragma: "no-cache",
+  };
+}
+
+const MAX_FAILED_ACCESS_ATTEMPTS = 5;
+const LOCK_DURATION_MS = 15 * 60 * 1000;
+
 const shareRouter = new Hono();
 
 /**
@@ -101,10 +111,14 @@ shareRouter.get("/:token", async (c) => {
   // Password-protected links must be unlocked separately.
   // Merely opening the URL must NOT consume the link.
   if (shareLink.accessType === "PASSWORD") {
-    return c.json({
-      success: true,
-      requiresAccessKey: true,
-    });
+    return c.json(
+      {
+        success: true,
+        requiresAccessKey: true,
+      },
+      200,
+      noStoreHeaders(),
+    );
   }
 
   // ---------------------------------------------------------
@@ -202,12 +216,16 @@ shareRouter.get("/:token", async (c) => {
     );
   }
 
-  return c.json({
-    success: true,
-    requiresAccessKey: false,
-    note,
-    viewCount: shareLink.viewCount,
-  });
+  return c.json(
+    {
+      success: true,
+      requiresAccessKey: false,
+      note,
+      viewCount: shareLink.viewCount,
+    },
+    200,
+    noStoreHeaders(),
+  );
 });
 
 /**
@@ -262,6 +280,8 @@ shareRouter.post("/:token/unlock", async (c) => {
       expiresAt: shareLinks.expiresAt,
       usedAt: shareLinks.usedAt,
       revokedAt: shareLinks.revokedAt,
+      failedAccessAttempts: shareLinks.failedAccessAttempts,
+      lockedUntil: shareLinks.lockedUntil,
     })
     .from(shareLinks)
     .where(eq(shareLinks.tokenHash, tokenHash))
@@ -314,6 +334,18 @@ shareRouter.post("/:token/unlock", async (c) => {
     );
   }
 
+  // Too many attempts check
+  if (shareLink.lockedUntil && shareLink.lockedUntil > new Date()) {
+    return c.json(
+      {
+        success: false,
+        message: "Too many failed attempts. Try again later.",
+      },
+      429,
+      noStoreHeaders(),
+    );
+  }
+
   // Only PASSWORD links should reach this endpoint.
   if (shareLink.accessType !== "PASSWORD" || !shareLink.accessKeyHash) {
     return c.json(
@@ -329,14 +361,54 @@ shareRouter.post("/:token/unlock", async (c) => {
   const isValid = await verifyPassword(shareLink.accessKeyHash, accessKey);
 
   if (!isValid) {
+    const [updatedLink] = await db
+      .update(shareLinks)
+      .set({
+        failedAccessAttempts: sql`
+        LEAST(
+          ${shareLinks.failedAccessAttempts} + 1,
+          ${MAX_FAILED_ACCESS_ATTEMPTS}
+        )
+      `,
+      })
+      .where(eq(shareLinks.id, shareLink.id))
+      .returning({
+        failedAccessAttempts: shareLinks.failedAccessAttempts,
+      });
+
+    const failedAttempts =
+      updatedLink?.failedAccessAttempts ?? MAX_FAILED_ACCESS_ATTEMPTS;
+
+    const shouldLock = failedAttempts >= MAX_FAILED_ACCESS_ATTEMPTS;
+
+    if (shouldLock) {
+      await db
+        .update(shareLinks)
+        .set({
+          lockedUntil: new Date(Date.now() + LOCK_DURATION_MS),
+        })
+        .where(eq(shareLinks.id, shareLink.id));
+    }
+
     return c.json(
       {
         success: false,
-        message: "Invalid access key",
+        message: shouldLock
+          ? "Too many failed attempts. Try again later."
+          : "Invalid access key",
       },
-      401,
+      shouldLock ? 429 : 401,
+      noStoreHeaders(),
     );
   }
+
+  await db
+    .update(shareLinks)
+    .set({
+      failedAccessAttempts: 0,
+      lockedUntil: null,
+    })
+    .where(eq(shareLinks.id, shareLink.id));
 
   // ---------------------------------------------------------
   // PASSWORD + ONE_TIME
@@ -393,12 +465,16 @@ shareRouter.post("/:token/unlock", async (c) => {
       );
     }
 
-    return c.json({
-      success: true,
-      requiresAccessKey: false,
-      note,
-      viewCount: claimedLink.viewCount,
-    });
+    return c.json(
+      {
+        success: true,
+        requiresAccessKey: false,
+        note,
+        viewCount: claimedLink.viewCount,
+      },
+      200,
+      noStoreHeaders(),
+    );
   }
 
   // ---------------------------------------------------------
@@ -455,12 +531,16 @@ shareRouter.post("/:token/unlock", async (c) => {
     );
   }
 
-  return c.json({
-    success: true,
-    requiresAccessKey: false,
-    note,
-    viewCount: updatedLink.viewCount,
-  });
+  return c.json(
+    {
+      success: true,
+      requiresAccessKey: false,
+      note,
+      viewCount: updatedLink.viewCount,
+    },
+    200,
+    noStoreHeaders(),
+  );
 });
 
 export default shareRouter;

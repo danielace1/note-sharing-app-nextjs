@@ -153,6 +153,14 @@ export const shareLinks = pgTable(
 
     viewCount: integer("view_count").default(0).notNull(),
 
+    failedAccessAttempts: integer("failed_access_attempts")
+      .default(0)
+      .notNull(),
+
+    lockedUntil: timestamp("locked_until", {
+      withTimezone: true,
+    }),
+
     createdAt: timestamp("created_at", {
       withTimezone: true,
     })

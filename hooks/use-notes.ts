@@ -11,10 +11,11 @@ import {
   type CreateNoteInput,
 } from "@/lib/api/notes";
 
-export function useNotes() {
+export function useNotes(enabled = true) {
   return useQuery({
     queryKey: ["notes"],
     queryFn: getNotes,
+    enabled,
   });
 }
 

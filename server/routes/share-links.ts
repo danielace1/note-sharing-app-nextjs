@@ -183,10 +183,14 @@ shareLinksRouter.post("/notes/:noteId/share", sessionMiddleware, async (c) => {
   return c.json(
     {
       success: true,
-      shareLink: {
-        ...shareLink,
-        token: rawToken,
-      },
+      message: "Share link created successfully",
+      shareLink,
+      token: rawToken,
+      ...(data.accessType === "PASSWORD" && data.accessKey
+        ? {
+            accessKey: data.accessKey,
+          }
+        : {}),
     },
     201,
   );
