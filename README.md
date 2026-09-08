@@ -735,28 +735,3 @@ https://share-note-ruby.vercel.app/
 ```
 
 ---
-
-# GitHub Repository
-
-```
-https://github.com/danielace1/note-sharing-app-nextjs
-```
-
----
-
-# Git Workflow
-
-Development follows a simple Git workflow:
-
-1. Understand the requirement.
-2. Create a separate branch for changes.
-3. Implement the feature.
-4. Test the changes manually.
-5. Run type checking and production build.
-6. Review the changes.
-7. Commit the changes.
-8. Push the branch.
-9. Create a pull request.
-10. Address review feedback.
-
----
